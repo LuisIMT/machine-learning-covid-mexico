@@ -1,0 +1,330 @@
+---
+title: "continuacion_notas_hand_on_ML"
+author: "LuisIMT"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr) #manipulación de los datos
+library(ggplot2) # hacer gráficas
+library(caret) # validación cruzada
+library(vip) # variables importantes
+library(rsample)
+ames <- AmesHousing::make_ames()
+set.seed(123)
+split <- initial_split(ames, prop = 0.7, 
+                       strata = "Sale_Price")
+ames_train  <- training(split)
+ames_test   <- testing(split)
+model1 <- lm(Sale_Price ~ Gr_Liv_Area, data = ames_train)
+summary(model1) 
+sigma(model1)
+confint(model1, level = 0.95)
+(model2 <- lm(Sale_Price ~ Gr_Liv_Area + Year_Built, data = ames_train))
+(model2 <- update(model1, . ~ . + Year_Built))
+lm(Sale_Price ~ Gr_Liv_Area + Year_Built + Gr_Liv_Area:Year_Built, data = ames_train)
+```
+
+```{r Regresion linel multiple tradicional}
+regresion.linel.ames.01 <- lm(Sale_Price ~ Year_Built, data = ames_train)
+summary(regresion.linel.ames.01)
+
+```
+
+Vamos a predecir
+
+```{r Regresion linel multiple tradicional}
+regresion.linel.ames.01 <- lm(Sale_Price ~ Year_Built + Roof_Style, data = ames_train)
+summary(regresion.linel.ames.01)
+
+```
+
+usar caret para entrenar nuestro modelo
+
+```{r Entrenamiento de la regresion multiplw}
+library(caret)
+set.seed(NULL)
+
+modelo.regresion.entrenado.caret <- caret::train(
+  form = Sale_Price ~ Gr_Liv_Area + Year_Built + Lot_Area,
+  data = ames_train,
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 10)
+)
+
+summary(modelo.regresion.entrenado.caret)
+
+```
+
+
+
+```{r}
+#usamos caret para entrenamiento
+
+
+```
+```{r Implementamos el modelo MARS}
+# create a tuning grid
+hyper_grid <- expand.grid(degree = 1:3,
+  nprune = seq(2, 100, length.out = 5) %>%
+    floor())
+
+library(earth)
+# Usamos caret para entrenamiento
+set.seed(NULL)
+cv_mars_ames.01 <- caret::train(
+  x = subset(ames_train, select = -Sale_Price),
+  y = ames_train$Sale_Price,
+  method = "earth", # Recuerda previamente cargar library(earth)
+  metric = "RMSE",
+  trControl = caret::trainControl(method = "cv", number = 10),
+  tuneGrid = hyper_grid
+  )
+```
+```{r}
+# View results
+cv_mars$bestTune # Best model
+cv_mars$results %>%
+  filter(nprune == cv_mars$bestTune$nprune, degree == cv_mars$bestTune$degree)
+# Extract coefficients
+coef(cv_mars$finalModel)
+```
+
+
+```{r}
+p2 <- vip(cv_mars,
+          num_features = 40,
+          geom = "point",
+          value = "rss") +
+  ggtitle("Varible importante based on RSS") +
+  theme_bw()
+```
+
+
+```{r}
+g1 <- partial(cv_mars, pred.var = "Health perception", grid.resolution = 10) %>%
+  ggplot(aes(x=`Health perception`  , y=`yhat`)) + geom_line() + ylab("Total Quality of life") + ggtitle("Health perception partial-dependence") + theme_bw() + theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
+```
+
+
+
+```{r}
+
+
+p2 <- vip(cv_mars,
+          num_features = 40,
+          geom = "point",
+          value = "rss") +
+  ggtitle("Varible importante based on RSS") +
+  theme_bw()
+
+ggsave("Importance_variable_MARS.png", p2, width = 15, height = 10, units = "cm", dpi = 300)
+
+```
+
+
+
+```{r grafico 3d}
+g6 <- partial(cv_mars, pred.var = c("Health perception","Quality of life perception"), grid.resolution = 40)
+png(file="Perception-variables_interaction_3D.png",                                                                    width = 30,
+    height = 20,
+    units = "cm",
+    res = 150)
+library(plot3D)
+points3D(x =  g6$`Health perception`,
+         y = g6$`Quality of life perception`,
+         z = g6$yhat,
+         pch = 20,
+         cex = 1.1,
+         ticktype = "simple",
+         theta = 30,
+         phi = 20,
+         bty ="g",
+         main = "Perception-variables interaction",
+         xlab = "Health perception",
+         ylab ="Quality of life perception",
+         zlab = "Total Quality of life",
+         clab = c("Total Quality of life", "score"),
+         colkey = list(length = 0.5,
+                       width = 0.5,
+                       cex.clab = 1.4,
+                       dist = -0.05,
+                       cex.axis = 1.4),
+         cex.lab = 1.5,
+         cex.main = 1.9
+         )
+dev.off()
+```
+
+
+```{r primer modelo binomial}
+#str(variable) debe ser factor
+#levels(base) ver cuantos niveles tiene el factor, deben ser 0 1
+
+str(ames_train$Street) # Verificamos que la variable sea tipo factor
+levels(ames_train$Street) # Veo los niveles
+# Como aparece primero "Grvl" esta será mi categoría base, y esto es muy importante para la interpretacción.
+# Si quisieras intervambiar la categoría base, puedes usar la siguiente línea de código
+ames_train$Street <- relevel(ames_train$Street, ref = "Pave")
+
+library(caret)
+library(ggplot2)
+library(rsample)
+modelo.binomial.ames.caret.01 <- caret::train(Street ~
+               Sale_Price + Lot_Area,
+             data = ames_train,
+             family = "binomial",
+             trControl = trainControl(method = "cv", number = 10)
+             )
+
+table(ames_train$Street)
+summary(modelo.binomial.ames.caret.01)
+modelo.binomial.ames.caret.01$results
+predict(modelo.binomial.ames.caret.01, ames_test)
+exp(coef(modelo.binomial.ames.caret.01))
+
+#one hot encoding 
+#variables
+```
+
+```{r}
+
+```
+
+
+```{r arbol de decision librerias}
+
+# Helper packages
+library(dplyr)       # for data wrangling
+library(ggplot2)     # for awesome plotting
+library(doParallel)  # for parallel backend to foreach
+library(foreach)     # for parallel processing with for loops
+
+# Modeling packages
+library(caret)       # for general model fitting
+library(rpart)       # for fitting decision trees
+library(ipred)       # for fitting bagged decision trees
+
+# Model interpretability packages
+library(rpart.plot)  # for plotting decision trees
+library(vip)         # for feature importance
+library(pdp)         # for feature effects
+```
+Con la base de datos AMES vamos a predecir el precio de venta de las viviendas en base a arboles de decision 
+```{r arbol de decision}
+ames_dt1 <- rpart(
+  formula = Sale_Price ~ .,
+  data    = ames_train,
+  method  = "anova"
+  )
+ames_dt1
+```
+
+Posteriormente hacemos el gráfico del arbol de decisión. 
+
+```{r arbol de decision grafico}
+rpart.plot::rpart.plot(ames_dt1)
+plotcp(ames_dt1)
+```
+# make bootstrapping reproducible
+```{r}
+set.seed(pi)
+# train bagged model
+ames_bag1 <- bagging(
+formula = Sale_Price ~ .,
+data = ames_train,
+nbagg = 10,  
+coob = TRUE,
+control = rpart.control(minsplit = 2, cp = 0)
+)
+ames_bag1
+predict(ames_bag1, ames_train)
+```
+```{r}
+#trees con Caret
+#{r Bagging con caret}
+ames_bag2 <- train(
+  Sale_Price ~ .,
+  data = ames_train,
+  method = "treebag",
+  trControl = trainControl(method = "boot", number = 10),
+  nbagg = 10,  
+  control = rpart.control(minsplit = 2, cp = 0)
+  )
+ames_bag2
+```
+
+```{r valorizacion variable}
+library(vip)
+vip(ames_bag2)
+```
+```{r grafico parcial}
+# Construct partial dependence plots
+p1 <- pdp::partial(
+  ames_bag2, 
+  pred.var = "Lot_Area",
+  grid.resolution = 20
+  ) %>% 
+  autoplot()
+p1
+```
+En este caso, ahora vamos a ver para dividir las tareas de calculo en cada core del procesador 
+```{r ensamble paralelo}
+# Create a parallel socket cluster
+
+cl <- parallel::makeCluster(2) # use 8 workers
+registerDoParallel(cl) # register the parallel backend
+
+# Fit trees in parallel and compute predictions on the test set
+predictions <- foreach(
+  icount(6), 
+  .packages = "rpart", 
+  .combine = cbind
+  ) %dopar% {
+    # bootstrap copy of training data
+    index <- sample(nrow(ames_train), replace = TRUE)
+    ames_train_boot <- ames_train[index, ]  
+    
+    
+    # fit tree to bootstrap copy
+    bagged_tree <- rpart(
+      Sale_Price ~ ., 
+      control = rpart.control(minsplit = 2, cp = 0),
+      data = ames_train_boot
+      ) 
+    
+    predict(bagged_tree, newdata = ames_test)
+    }
+
+predictions
+predictions<-as.data.frame(predictions)
+resultados.promediados <- lapply(predictions, margin=2, mean)
+# Shutdown parallel cluster
+stopCluster(cl)
+
+```
+```{r arbol de decision con h2o}
+
+# collect the results and sort by our model performance metric 
+# of choice
+random_grid_perf <- h2o.getGrid(
+  grid_id = "rf_random_grid", 
+  sort_by = "mse", 
+  decreasing = FALSE
+)
+random_grid_perf
+# Accedemos al mejor modelo
+mejor.modelo<-h2o.getModel(random_grid@model_ids[[1]])
+mejor.modelo
+h2o.predict(mejor.modelo, train_h2o)
+
+```
+
+
+
+

@@ -1,0 +1,994 @@
+---
+title: "Notas del libro 'Hands-On Machine Learning with R' de Bradley Boehmke & Brandon
+  Greenwell"
+author: "Luis I Murillo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    collapsed: yes
+    code_folding: show
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    smooth_scroll: yes
+    highlight: kate
+    df_print: paged
+    number_sections: yes
+    theme: simplex
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = "hide")
+```
+
+#Seminario de Proyecto En este presente trabajo se llevará el registro y
+el desarrollo de actividades en la asignatura Seminario de Proyectos en
+el semestre 2023-2. Llevando como libro base el
+<https://bradleyboehmke.github.io/HOML/>
+
+#Introducción al Machine Learning 
+
+El principio general del Machine Learning es la busqueda de aprender de los datos. Tiene aplicación en
+predicciones como en casos de de pacientes que retornas a hospitales
+despues de un periodo de tiempo de concurrencia, en la segmentación de
+mercados para marketing y en muchos casos más. En las bases de datos se
+optienene datos y caracteristicas que alimentan a los algortimos para
+extrair información de interés. Se desarrollaran las ideas de dos grupos
+de aprendizaje, los supervisados que son modelos predictivos y los no
+supervisados que constituyen de modelos descriptivos.
+
+#Aprendizaje supervisado
+
+Los aprendizajes supervisados o modelos predictivos utilizan variables o
+caracteristicas de un conjunto de datos para predecir un reterminado
+resultado, con el objetivo de descubrir y modelar las relaciones que
+existen entre las variables y/o características. Normalmente se describe
+como X en terminos de "variable independiente", "variable predictora", o
+"atribito","caracteristica" con su valor de salida Y que también se dice
+"variable independiente", "respuesta" o "variable objetivo".
+
+Es supervisado porque el valor objetivo se optiene a partir de las
+tareas que debe aprender se la da el que lo implementa. Las dos más
+grandes categorías del aprendizaje supervisado son dos las regressiones
+y las clasificaciones.
+
+##Problemas de regresión
+
+Cuando el valor objetivo a predecir es númerico se hace referencia a
+losproblemas de regresiones, que son de naturaleza continua como por
+ejemplo la predicción de los precios de de venta de las viviendas y el
+tiempo de comercialización. La ccurva que genera son continuas y
+dependiendo de las combinaciones de variables independientes o valores
+predictivos tenemos una respuesta dada.
+
+##Problema de clasificación
+
+Cuando el valor objetivo a predecir es categorico se hace referencoa a
+problemas de clasificación, logra prodecir predicciones binarias o
+multinomilas y sus probabilidades.
+
+#Aprendizaje no supervisado
+
+Este cuenta con herramientas estadísticas para comprender y describir
+mejor los datos, no es necesario tener definida una variable objetivo ya
+que se dedica a identificar grupos en los conjuntos de datos. Estos
+grupos pueden ser definidos por agrupación (en filas) o por reducción de
+dimensiones (columnas). Este tipo de implementaciones se realizan a
+menudo como parte de un análisis exploratorio de datos, con objetivos
+simple y con mayor peso a lo subjetivo. Su importancia es la división e
+identificación de grupos,
+
+#Aplicación: E-commerce Se utiliza el algoritmo de Random Forest en el
+comercio electrónico para predecir las ventas de algún producto. Ya que
+se sabe que despues de ver un anuncio de Facebook, algunos clientes si
+compran el producto tras el ver el anuncio y algunos no. Entonces el
+utilizar un random forest con datos de los clientes como la edad, el
+sexo, preferencias personales e intereses permitirán predecir que
+clientes comprarían y cuales no.
+
+información recuperada de
+<https://serokell.io/blog/random-forest-classification> #Data sets La
+ingeniería de características de dedican a eliminar variabkes
+innecesarias y conversar las que son necesarias para los procesos de
+modelado, recodificar los nombre y valores
+
+```{r Lectura base de datos AmesHousing}
+# install.packages("AmesHousing", dependencies = T) # Instalamos el paquete
+library(AmesHousing) # llamamos la librería
+ames.bd <- make_ames() # Cargamos la base de datos
+```
+
+```{r Exploración de la bd AmesHousing}
+str(ames.bd) # Proporciona la estructura de la base de datos
+names(ames.bd) # visualización de los nombres de las variables
+# Si queremos revisar la estructura con tidyverse
+library(tidyverse) #llamar librería tidyverse
+ames.bd %>% #concatenar
+  glimpse() %>% #
+  is.na() # Aquí revisamos cuántos valores perdidos tenemos con tidy
+# Vamos a revisar cuántos valores perdidos tenemos (con rbase)
+is.na(ames.bd)
+
+## Ahora un gráfico par ver los NA's
+library(visdat)
+vis_miss(ames.bd) #busca los NA con visdat
+
+## Finalmente, un gráfico múltiple para explorar relaciones, distribuciones y otras propiedades
+library(GGally)
+ggpairs(ames.bd[,c(3,7,25)], cardinality_threshold = 30, aes(colour=Lot_Shape, alpha=0.75))
+ggsave("grafico.general.ames.png", units = c("cm"),width = 40, height = 20, dpi=300, device = png, plot = last_plot()) #Solo se utilizo las columnas 3,7 y 25 de ames.bd, aes da colores
+```
+
+```{r Exploración de la bd attrition IMB}
+library(modeldata) #librería modeldata
+attrition.bd <- modeldata::attrition #guardar en una variable el dataset 
+str(attrition.bd) #tipos de datos del datset
+dim(attrition.bd) #dimensiones de dataset
+head(attrition.bd$Attrition) #primeros datos de la variable Attrition del dataset
+```
+
+```{r AT&T Bell Lab }
+mnist.bd<-dslabs::read_mnist()
+str(mnist.bd)
+names(mnist.bd)
+dim(mnist.bd$train$images)
+head(mnist.bd)
+```
+
+```{r Basket grocery bd}
+url <- "https://koalaverse.github.io/homlr/data/my_basket.csv"
+my_basket <- readr::read_csv(url)
+
+dim(my_basket)
+```
+
+#Proceso de modelado
+
+Las implementaciones de machine learning siguen procesos iterativos y
+heurísticos que requieren conocer el problemas, los datos con lo que se
+van a trabajar, probar diversos algoritmos que se aproximen al resultado
+deseado. El modelo ganador será aquel que estrategicamente gaste
+nuestros datos sabiamente en los procedimientos de
+aprendizaje,validación, ajuste de hiperparametros y rendimiento. Muchas
+veces se requiere un preprocesamiento para definir las variables
+adecuadas y minimizando la fuga de datos.
+
+# Modelado
+
+Para la ilustación de los conceptos se utilizaron las base de datos de
+Housing y Employee Attrition que se hizo una analísis exploratorio
+anteriormente.
+
+Se aprovechará el paquete h2o para las implementaciones 
+
+## Paquetes requeridos
+
+```{r Paquetes}
+# Helper packages
+library(dplyr)     # for data manipulation
+library(ggplot2)   # for awesome graphics
+
+# Modeling process packages
+library(rsample)   # for resampling procedures
+library(caret)     # for resampling and model training
+library(h2o)       # for resampling and model training
+
+# h2o set-up 
+# h2o.no_progress()  # turn off h2o progress bars
+h2o.init(nthreads = -1)         # launch h2o
+
+# Ames housing data
+ames <- AmesHousing::make_ames()
+ames.h2o <- as.h2o(ames)
+
+h2o.ls()
+h2o.hist(ames.h2o$Lot_Area)
+h2o.describe(ames.h2o)
+
+
+```
+
+## Particiones
+
+Unos de los principalesobjetivos del aprendizaje automático es el ajuste
+adecuado a nuestros datos pasados y lo más importante predecir datos
+acertados para el futuro, esto lo llamamos generalizació de nuestro
+algoritmo.
+
+Para una buena implementación debemos de dividor nuestros datos en datos
+de entrenamiento y de validación.
+
+Los datos de entrenamiento eran los datos que serán los inputs de
+nuestros algoritmos de prueba que nos ayudarán a definir un modelo
+final. Para el otro caso, los datos de validación se utilizan para
+evaluar el rendimiento del modelo.
+
+De manera típica se dividen los datos en proporciones de 60%-40%,
+70%-30%, 80%20%. Es recomendable saber que si se elige más de 80% de los
+datos para el entrenamiento se ajustarán bien los datos pero no sea un
+caso generalizable por el sobreajuste. Menos del 40% de los datos para
+el entrenamiento no permitirá obtener buenos parámetros para los
+modelos. Igual de debe contemplar el tamaño de los dataset que
+trabajamos, en ocasiones cuando los datos son más de 100K se recomienda
+utilizar datset más pequeña, ya se aumentan la velocidad de cálculos,
+otros caso los dataset cuentan con pocas caracteristicas para
+indentificar buenos parametros y es necesario adquirir más
+características.
+
+Los metodos comunes para la selección de los datos es el muestreo
+aleatorio simple y el muestreo estratificado. \### Partición simple
+
+Es la manera más sencilla, tomar los datos de entrenamiento de manera
+aleatoria, no existe ningún control de atributos, ni la distribución de
+la variable respuesta.
+
+Los siguientes ejemplos produce una divisón de 70-30 en datos de
+AmeHousing
+
+```{r particion aleatorio simple con r base}
+set.seed(123)  # semilla 
+index_1 <- sample(1:nrow(ames), round(nrow(ames) * 0.7))
+train_1 <- ames[index_1, ]
+test_1  <- ames[-index_1, ]
+
+```
+
+```{r particion aleatorio simple con caret}
+set.seed(123)  # for reproducibility
+index_2 <- createDataPartition(ames$Sale_Price, p = 0.7, 
+                               list = FALSE)
+train_2 <- ames[index_2, ]
+test_2  <- ames[-index_2, ]
+
+```
+
+```{r particiones aleatorio cimple con rsample}
+# Using rsample package
+set.seed(123)  # for reproducibility
+split_1  <- initial_split(ames, prop = 0.7)
+train_3  <- training(split_1)
+test_3   <- testing(split_1)
+```
+
+```{r partición aleatoria simple con h2o}
+particiones<-h2o.splitFrame(data = ames.h2o,
+               ratios = c(0.7),
+               seed = 123)
+entrenamiento <- particiones[[1]]
+prueba <- particiones[[2]]
+```
+
+### Partición estratificada
+
+Cuando se debe controlar los de alguna de las características , se hacen
+las particiones estratificadas, es más habitual para problemas de
+clasificación o regresiones con muestras pequeñas. Esta forma garantiza
+que representación equilibrada de la distribución de la variable
+respuesta tanto para el set de entrenamiento y el set de validación.
+
+```{r Partición estratificada}
+library(modeldata)
+attrition.bd <- modeldata::attrition
+str(attrition.bd)
+
+# orginal response distribution
+table(attrition.bd$Attrition) # Con R base
+
+table(attrition.bd$Attrition) %>% prop.table() # Con Tidy
+
+# stratified sampling with the rsample package
+set.seed(123)
+library(rsample)
+split_strat  <- initial_split(attrition.bd, prop = 0.7, 
+                              strata = "Attrition")
+train_strat  <- training(split_strat)
+test_strat   <- testing(split_strat)
+
+# consistent response ratio between train & test
+table(train_strat$Attrition) %>% prop.table()
+table(test_strat$Attrition) %>% prop.table()
+```
+
+###Desequilibración de categorias
+
+El desequilibrio tiene impacto significativo en la predicciones y
+rendimiento de los modelos. Para estos caso se debe de utilizar los
+métodos de muestreo ascendentes o muestreo descendente.
+
+El muestreo descendientes equilibra los tamaños de las caracteristicas
+en numeros de frecuencia iguales entre las más abundantes y la menos. Es
+útil para los casos cuando la cantidad de los datos es suficiente. Ayuda
+a reducir la carga computacional de los algoritmos.
+
+El muestreo ascendente se emplea en los casos contrarios, cuando la data
+no es suficiente. Se equilibra el conjunto cuando se aumenta el número
+de muestras raras utilizando la repetición o el bootstrapping.
+
+La combinación de ambos métodos suelen tener éxito, se le conoce a esto
+como Técnica de Sobremuestreo de Minorías sintéticas SMOTE. La librería
+de h2o utiliza estos métodos con los argumentos weights_column y
+balance_classes.
+
+#Creación de modelos El lenguaje R tiene una gran variedad de
+implementaciones de algortimos de Machine Leaning, que pueden ser
+eficientes en el punto de vista computacional, otros pueden ser más
+opciones de ajuste de hiperparámetros.
+
+#Fórmulas & interfaces
+
+Existen dos interfaces principales, una es la la regla de fórmula de R
+para especificar uan representación simbólica de los terminos. Como por
+ejemplo
+
+```{r ejemplos de modelos lineales}
+
+# Sale price as function of neighborhood and year sold
+lm(Sale_Price ~ Neighborhood + Year_Sold, 
+         data = ames)
+
+# Variables + interactions
+lm(Sale_Price ~ Neighborhood + Year_Sold + 
+           Neighborhood:Year_Sold, data = ames)
+
+# Shorthand for all predictors
+lm(Sale_Price ~ ., data = ames)
+
+# Inline functions / transformations
+# lm_lm(log10(Sale_Price) ~ ns(Longitude, df = 3) +    ns(Latitude, df = 3), data = ames)
+```
+
+Es funcional esta porfa, pero tiene algunos inconvenientes si se decía
+hacer otras implementaciones. En ese caso no se prodia realizar un
+análisis de componentes principales en el conjunto de las caracteríticas
+antes de ejecutar el modelo, todos los calculos realizados de la matriz
+se realizan al mismo tiempo lo que no perdime reciclar cuando se utiliza
+una función del modelo, también esta restringido a pocas variables ya
+que vuelve ineficiente, torpe y poco elegante. Entonces existe otra
+manera de modelación sin fórmula (XY), aqui se separan los argumentos de
+los predictores y el de los resultados:
+
+En mejor que el anterior, sin embargo tiene inconveniente si se debe de
+transformaciones, variables factoriales, interrraciones o cualquier otra
+operación que aplicación para los datos anteriores.
+
+Es díficil determinar si un paquete tiene una o ambas interfaces. La
+función lm() realiza regresiones lineales, sólo tiene el método de
+formula. Implicando que es util hasta que se este familiarizado con una
+implementación concreta.
+
+Una interfaz más es utilizar especificacioón del nombre de la variable
+donde se debe de proporcionar todos los datos combinados en un marco de
+entrenamiento donde debemos especificar las caracteristicas y la
+respuesta con cadenas de caracteres. Se puede implementar está interfaz
+con el paquete h2o.
+
+Son más eficientes los cálculos, que como en los otros casos tiene
+inconvenientes con transformaciones, variables factoriales o cualquier
+otra operación que aplicar a los datos antes del modelado.
+
+```{r}
+
+#lm(
+#  x = c("Year_Sold", "Longitude", "Latitude"),
+#  y = "Sale_Price",
+#  data = ames.h2o
+#)
+```
+
+#Motores
+
+Los paquetes anteriores de Machine Learning son paquetes individuales,
+también existen muchas metamotores que se pueden utilizar para ayudar a
+dar coherencia a la implementación. Por ejemplo todos los siguientes
+ejemplos calculan el mismo modelo de regresión lineal:
+
+```{r}
+#library(caret)
+#lm_lm    <- lm(Sale_Price ~ ., data = ames)
+#lm_glm   <- glm(Sale_Price ~ ., data = ames, 
+#                family = gaussian)
+#lm_caret <- train(Sale_Price ~ ., data = ames, 
+#                  method = "lm")
+```
+
+Las funciones lm() y glm() son dos motores de algoritmos diferentes que
+se pueden utilizar para ajustar el modelo lineal y caret::train() es un
+metamotor que permite aplicar casi cualquier motor directo con metjod =
+"nombre_de_motor". Entonces estas dos formas tiene ventajas y
+desventajas entre otros. Por ejemplo un motor directo permite una
+flexibiliad extrema y lo que demanda es estar familiarizado con las
+diferencias de cada implementación. En el caso de los metamotores se
+tiene mayor coherencia a la hora de especificar las entradas y extraer
+las salidas, pero no menos flexibilidad que los motores directos.
+
+# Métodos de remuestreo
+
+Recapitulando los dataset los dividimos en dos, en conjuntos de
+entrenamiento y de prueba. El conjunto de prueba nos permite evaluar el
+rendimiento del modelo durante la fase de entrenamiento. Lo que también
+hay que debe hacer es la evaluación del rendimiento de generalización
+del modelo, una forma es midiendo el error basados en los datos de
+entrenamiento. Es importante señalar que ests resultados están sesgados,
+ya que algunos modelos pueden funcionar muy bien en los datos de
+entrenamiento pero no generalizar en un nuevo conjunto de datos.
+
+Entonces otra manera de validad consiste en dividir el conjunto de
+entrenamiento en dos partes, como en el paso anterior en dos un conjunto
+de entrenamiento y un conjunto de validación, y es bien salido que para
+pocos datos y con un único conjunto de retención es bastante variable y
+poco fiable a menos que se trate de un conjunto de datos muy grande.
+
+Los metodos de remuestreo permiten ajustar repetidamente un modelo de
+interés a partes de los datos de entrenamiento y probar su rendimiento
+en otras partes. Los métodos más utilizados son la validación cruzada
+k-fold y el bootstrapping
+
+##k-fold
+
+La validación cruzada k-fold, es un método de remuestreo que divide
+aleatoriamente los datos de entrenamiento en k grupos de aproximadamente
+el mismo tamaño. El modelo se ajusta en k-1 veces y el último grupo se
+utiliza para calcular el rendimiento del modelo. Este proceso da como
+resultado k estimaciones del error de generalización al promediarlos se
+tiene una aproximación del error que podríamos esperar en datos no
+vistos.
+
+Por lo tanto cada observación de los datos de entrenamiento se retendrá
+una vez para incluirla en el conjunto de prueba. Normalmente se utilizan
+un k=5 o k=10. Sin embargo no existe una regla formal para el tamaño de
+la k , pero si hay que tener en cuenta que al aumentar k disminuye la
+diferencia entre el rendimiento estimado y el rendimiento verdadero. Se
+ha demostrado que repetir k-fold puede ayudar aumantar la precisión del
+error entonces es mejor y más recomendable repetir 5 o 10 veces de
+k-fold para mejorar la precisión
+
+```{r}
+# Example using h2o
+#h2o.cv <- h2o.glm(
+ # x = x, 
+  #y = y, 
+  #training_frame = ames.h2o,
+  #nfolds = 10  # perform 10-fold CV
+#)
+```
+
+## Bootstrapping
+
+Por definición Bootstrapping es un muestreo aleatorio de los datos con remplazo. Lo que permite seleccionar datos para incluir en un subset y poder seleccionar con futuras selecciones. Uno simple bootstrapping puede tener el tamaño del que se requiera construir. La distribución de los valores se asemeja a los datos originales, en cada remplazo contienen valores duplicados, aproximadamente un 63.21% de los datos originales. Se utiliza normalmente en implementaciones de random forests.
+
+Este método tienen a disminiur la variabilidad y el error de medida en comparación a k-fold. Sin embargo incrementa el sesgo del error de estimación, es decir tiende a hacer sobre ajustes. Se genera un gran problema con data sets pequeños mejor de 1000 
+
+```{r}
+bootstraps(ames, time = 10)
+```
+
+
+## Alternativas
+
+Se deben utilizar otras alternativas para datos que son del tipo series de tiempo, por mencionar alguno puede se R-focused. 
+
+Otro método es el 632 method que es un bootstraps optimizado para muestras pequeñas.
+
+# Bias variance trade-off
+
+Se descompone la predicción de error en dos importantes componentes, el error por el sego y el error por la varianza. Lo que se busca en los modelos es minimizar ambos componentes, el sesgo y la varianza
+
+##Bias
+
+Es la diferencia entre el valor de predicción esperada de nuestro modelo con el valor cerrecto que intentamos predecir. Es decir que tan bien un modelo puede ajustarse a la estructura subyacente de los datos. Un ejemplo son los modelos lineales que tienen alto sesgo, ya que son modelos menos flexibles y rara vez son buenas estimaciones.
+
+Existe una relación de sesgo-varianza. Cuando los modelos tienen sesgos grandes rara vez se ven afectados por el ruido introducido por el remuestreo. 
+
+##Varianza
+
+Este se dfefine como la variabilidad de la predicción de un modelo para un punto de datos determinados. Modelos como k-nearestneighbor, decision trees, gradient boosting machines son muy adaptibles y ofrecen una flexibilidad extrema en los patrones a los que pueden ajustarse. El problema que presentas es que se corre el riesgo de sobreajuste a los datos de entrenamiento. Por eso logran conseguir un rendimiento muy bueno en los datos de entrenamientos pero el modelo no se generaliza automaticamente bien con otros datos. 
+
+Cuando estamos enfrente de un modelo de alta varianza son más propensos al sobreajuste, entonces hay que enfocarse ma´s en el remuestreo para reducir el riesgo. 
+
+
+Los algoritmos de un alto rendimiento de generalización tienen muchos hiperparámetors que controlan el nivel de complejidad del modelo
+
+## Ajuste de hiperparametros
+
+Puedes imaginarte que son "los botones que hay que tocar" para controlar la complejidad de los algoritmos de aprendizaje automático y, por lo tanto, el equilibrio entre sesgo y la varianza. No todos los algoritmos tienen hiperparámetros, pero si la mayoría tiene al menos uno.
+
+
+El ajuste que funcionen depende de los datos, y no siempre es suficiente los datos de entrenamiento. Para poder definir un buen valor de hiperpárametro se utilizan métodos para identificarlo. Por ejemplo, en los algoritmos de alta varianza k-nearest neighbo tiene el paramtero k que determina el valor predicho que debe hacerse de los datos de entrenamiento más cercanos , si k es pequeño por decir algo k =3 existira mucha varianza. A medida que j aumente , nuestra predicción va ir reduciendo la varianza de nuestro valor predicho. Sin embargo una k mucho más grande conduce a tener un mayor sesgo, que es lo que también se quiere minimizar. 
+
+# Evaluación de modelos
+
+Historicamente los modelos estadísticos se basaban en gran medida en pruebas de bondad de ajuste y en la evaluación de los residuos, pero para modelos predictivos no es suficiente. Hoy en día se evalua el rendimiento cn funciones de pérdida. Estas son métricas que comparan los valores predichos con el valor real, lo encontrarás como función de pérdida o pseudoresiduo. En los paso de remuestreo, evaluamos los valores predichos para un conjunto de valiadación en comparación con el valor real. 
+
+Por ejemplo en la regresiones se mide el error la diferencia entre el valor real y el predicho para una observación cualquiera. El error de validación global se calcula sumando los errores de todo el conjunto de datos. 
+
+
+## Modelos de regresiones
+
+MSE: Error cuadrático medio, hace que los errores más grandes tengan mayor penalización, casí no se utiliza
+RMSE : Raíz del error cuadrático medio, que tal cual es la reaíz de MSE y se permanecen las unidades
+Desviación : su nombre nombre es desviación residual media. Esta proporcina el grado en que un modelo explica la variación de los datos cuando se utiliza la maximum likelihood. En otras palabras compara un sistema con modelos saturados y no saturados. Si una función de distribución de una variable aleatoria es una gaussiana será proximadamente a un MSE. Se utiliza esta estimación en modelos de clasificación
+
+MAE: Error absoluto medio, solo es la diferencia absoluta media entre los valores reales y los predichos.
+
+RMSE: error logístico cuadrático medio. Es muy parecido a RMSE pero con naturaleza de logaritmo. 
+
+R2: Proporción de la varianza en la variable independiente que se predice a partir de las variables independeientes. Tiene muchas limitaciones
+
+Todos las funciones de pérdida buscan ser las minimas.
+
+## Modelos de clasificación
+
+Clasificación errenea: o también nombrado error global, en ls datos clasificados, porcentaje entre los errores y el total en cada clasificación. 
+
+Error medio de cada clase: Es la tasa media de cada clase
+
+MSE: error caudrático medio, Calcula la distancia de 1.0 probabilidad sugerida.El componente al cuadrado da lugar a grandes diferencias en las probalidades de que la clase verdadera tenga mayor penalización. 
+
+Entropía cruzada: o también dicho perdida logaritmica es similar a MSE pero incorpora un logaritmo de probabilidad predicha multiplicada por la clase verdadera
+
+Indice de Gini: Se ocupan en tree y denomina la pureza , donde un valor pequeño indica que un nodo contiene predominantemente observacionesde una única clase 
+
+Al implementar modelos de clasificación, parte es hacer una matrix de confusión para evaluar determinantes medidas de rendimiento. Esta matriz compara los niveles categoricos reales con los niveles categoricos predichos. Cuando se predice una categoria de manera correcta se refiere como un verdadero positivo. Si predecimos un nivel que no ocurrio se denomina falso positivo. Por el contrario si no se predice un modelo se denomina falso negativo. 
+
+Cuando es una clasificacion binaria. podemos evaluar:
+
+precisión: nos dice que frecuencia acierta el clasificador
+
+sensibilidad: con dice la precisión de la clasificación obtenida con la real. Cauntos se an predicho y se relaciona con la matriz de confusión.
+
+Especificidad: con que precesión se clasifican los eventos no reales
+
+AUC: son las siglas de area bajo la curva, un buen clasificador binario tendrá una precisión y sensibilidad alta. con la curva ROC donde estan los falsos positivos en el eje x y los verdaderos positivos en el eje y. Cuando más alta sea la línea en la esquina superior izquierda es mejor. 
+
+# Putting the processes together
+
+Seguimos con el ejemplo de Ames, e integramos los procesos. Primero se raliza un muestreo estratificado , para dividir nuestros datos de entrenamiento y de prueba. Asegurando que tenemos una distribucionescoherentes entre ambos conjuntos. 
+```{r stratified sampling with are rsample}
+set.seed(123)
+split <- rsample::initial_split(ames, prop = 0.7, 
+                       strata = "Sale_Price")
+ames_train  <- rsample::training(split)
+ames_test   <- rsample::testing(split)
+
+```
+
+Despues se selecciona el algoritmo, este caso una regressión k-nearest neighbor. Utilizamo la librería caret, con un metamotor y hacemos: Métodos de muestreo, 10-K fold repetido 5 veces y la busqueda en cuadricula, cambiamos los k.
+El entrenamiento fue con knn, utilizando nuestro procedimiento de remuestreo preespecificado en conjunto a la búsqueda de cuadrícula, la validación se da con la función de perdida RMSE
+
+
+```{r Scecify resampling strategy}
+cv <- caret::trainControl(
+  method = "repeatedcv", 
+  number = 10, 
+  repeats = 5
+)
+```
+
+El mejor modelo encontrado fue con k=7 que dio lugar a un RMSE de 43439.07. Esto implica que por termino medio , nuestro modelo predice erroneamente el precio de venta esperado de una vivienda en 43.439.
+
+```{r Print and plot}
+# Specify resampling strategy
+cv <- caret::trainControl(
+  method = "repeatedcv", 
+  number = 10, 
+  repeats = 5
+)
+
+# Create grid of hyperparameter values
+hyper_grid <- expand.grid(k = seq(2, 25, by = 1))
+
+# Tune a knn model using grid search
+knn_fit <- caret::train(
+  Sale_Price ~ ., 
+  data = ames_train, 
+  method = "knn", 
+  trControl = cv, 
+  tuneGrid = hyper_grid,
+  metric = "RMSE"
+)
+```
+
+La pregunta sigue siendo ¿este es el mejor modelo predictivo que podemos encontrar? Si seleccionamos variación con diferentes k , pero no encontramos otro mejor modelo global posible, pero esta la duda de otro método. 
+
+#FEATURE & TARGET ENGINEERING
+
+Las ingeniería de caracteristicas y los feacture suelen a la adición, eliminación o transformación de los datos. El tiempo dedicado a indentificar las necesidades de ingenieríade datos puede ser considerable y requiere tiempo para explorar y comprender los datos. Es muy importante está parte para las capacidades predictivas de un algoritmo . 
+
+#Prerequisites
+
+```{r chapter 3 package}
+# Helper packages
+library(dplyr)    # for data manipulation
+library(ggplot2)  # for awesome graphics
+library(visdat)   # for additional visualizations
+
+# Feature engineering packages
+library(caret)    # for various ML tasks
+library(recipes)  # for feature engineering tasks
+```
+
+#Target engineering
+En muchos modelos paramétricos la transformación de la variable de respuesta puede conducir a una mejora a la predicción. Por ejemplo los modelos lineales ordinarios suponene que los errores de predición se distribuyen normalmente. Pero hay caso donde the prediction target has heavy tails, tiene valores atipicos, es probable que no se cumpla el supuesto de normalidad. 
+
+Al utilizar una transformación logarítmica para minizar la asimetría de la respuesta también puede utilizarse para dar forma al problema. Existen dos enfoques principales para ayudar a corregir las variables objetivo sesgadas positivamente:
+
+Opción 1: normalizar con una formación transformación logarítmica , esto transformará la mayoría de las distribuciones sesgadas a la derecha para que sean aproximadamente normales. Se le hace al conjunto de entrenamiento y probando de forma manual.
+
+```{r transformacion logaritmica}
+# log transformation
+ames_recipe <- recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_log(all_outcomes())
+ames_recipe
+```
+
+Sin embargo, los precesamiento como la creación de un plano que se volverá a aplicar estrategicamente . Esto devolvera valores reales transformados del registro, sino un modelo que se aplicará más tarde. 
+
+```{r log transformation}
+log(-0.5)
+## [1] NaN
+log1p(-0.5)
+## [1] -0.6931472
+```
+
+Si la respuesta tiene valores negativos o ceros, entonces una transformación logistica producira NA respectivamente. Si se tienen valores pequeños se puede aplicar un pequeño desplazamiento. que añade 1 al valor antesde aplicar la transformación logarítmica. Si son -1 se utiliza otra transofrmación la de Yeo-Johson. 
+
+
+Opción 2: Utilizar la transformación de Box Cox, la cuál es más flexible, se define como la transformación logísticaa partir de una familia de transformaciones de potencias que transformará la variable lo más posible a una districuión normal. 
+El núcleo esta en lambda que varía de -5 a 5. Se consideran todos los valores de lambda y se calcula la distribución normal, y se escoje a partir del entrenamiento. La transformación de respuesta Y es una función a trozo que se comprta de una forma con lambda diferente a cero y cuando es igual a cero.
+
+No hay que olvidar que si se modelo una variable de forma transformada, la respuesta también es transformada, entonces hay que volver a regresar ala escala normal. Y entonces ya se puede interpretar correctamente. 
+```{r}
+# log transformation
+ames_recipe <- recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_log(all_outcomes())
+
+ames_recipe
+## Data Recipe
+## 
+## Inputs:
+## 
+##       role #variables
+##    outcome          1
+##  predictor         80
+## 
+## Operations:
+## 
+## Log transformation on all_outcomes
+```
+
+
+#Dealing with missingness
+
+Otra cosa que es importante tener en consideración la calidad de los datos. Aquí solo me mencionara el manera de valores omitidos. La razón de no tener son difersas, se categorizan de manera general en dos grandes divisiones: falta de información y la falta aleatorio. En el caso de falta de información no se recupero toda la información y/o se obtienen datos anomalos. Mientras que la omisión aleatoria implica que los valores omitidos se independientemente de recogida del datos. 
+
+Dependiendo de la categoria que se encuentre se tratan distintos los datos. Por ejemplo los valores que faltan se mueven establecer en un su propia categoria, mientras que los de omisión aleatoria si son necesario eliminarlos. 
+
+Y también debemos tomar en cuenta que cada modelo de aprendizaje gestiona las omisiones de forma diferente. Es cierto que la mayoria de los algoritmos (modelos lineales generalizados, redes neuronales, maquinas vectoreales)no pueden destionar las omisiones , entonces se tratan antes de la implementación. Y es recomendable tratarlos para no tener problema en la comparación de metodos. 
+
+## Visualizing missing values
+
+Es importante conocer la distribución de los valores perdidos en cualquier data set. 
+
+```{r NA}
+sum(is.na(AmesHousing::ames_raw))
+```
+
+Para definir el enfoque de prepocesamiento. Una herramienta común son los mapas de calor para visualizar la distribución de los valores omitidos. La exploración se hace puede hacer con "is.na" te devuelve una matrix con valores booleanos true donde si existe dato y false en donde no. Se puede construir un gráfico de color usando "heatmap()" o "imagen()" que esta en R base. Eso nos permite ver rápidamente donde hacen falta datos y se tiene algún patrón. 
+
+```{r view NA}
+AmesHousing::ames_raw %>%
+  is.na() %>%
+  reshape2::melt() %>%
+  ggplot(aes(Var2, Var1, fill=value)) + 
+    geom_raster() + 
+    coord_flip() +
+    scale_y_continuous(NULL, expand = c(0, 0)) +
+    scale_fill_grey(name = "", 
+                    labels = c("Present", 
+                               "Missing")) +
+    xlab("Observation") +
+    theme(axis.text.y  = element_text(size = 4))
+```
+
+En las valores perdidos por omisión de datos se debe de clasificar en otra variable. 
+Otra función que se puede usar es "vis_miss()" del paquete visdat, donde se visualizan los datos faltantes (con opciones de clasificación y agrupación)
+
+```{r}
+AmesHousing::ames_raw %>% 
+  filter(is.na(`Garage Type`)) %>% 
+  select(`Garage Type`, `Garage Cars`, `Garage Area`)
+
+vis_miss(AmesHousing::ames_raw, cluster = TRUE)
+```
+
+Hacen falta los datos por que nunca se registraron , o se registraron por error. En cualquier caso, es importante identificar e intentarcomprender como se distribuyen las valores que falta en un conjunto de datos. 
+
+## Imputation
+
+la imputación es el proceso de sustitucción de un valor omitido siendo "la mejor suposición" y es de lo primero pasos de la ingeniería de características, ya que afecta a cualquier prepocesamiento posterior.
+
+### Estimated statistic
+
+Un enfoque elemental para validar los valores perdidos de una característica consiste en calcular estadísticas descriptivas como la media, mediana  y/o moda y utilizarlos para reemplazar los NA. Es funcional a nivel computacional pero no necesariamente en la realidad de los datos. Una alernativa que se puede emplear es utilizar estadísticas agrupadas para capturar los valores esperados de las observaciones , sin embargo resulta invariable para datos muy grandes. Las formas más comunes son imputación basada en K-nearest neighbor. Se realiza el ejemplo
+
+```{r imputacion}
+ames_recipe %>%
+  step_impute_mean(Gr_Liv_Area)
+```
+
+
+### K-nearest neihbor
+
+de forma compacta KNN imputa los valores que son valores perdidos aelatorios, identificando otras observaciones que son más similiares basandose en caracteristicas disponibles y utilizando los valores más cercans para imputar los valores.
+
+Se explica al detalle en el capitulo 8, una breve explicación es que si todas las características son cuantitativas, se suele utilizar la distancia euclideana estándar como métrica de distancia para identificar a los k vecinos, cuando son combinadas las características (caulitativas, cuantitativas) se puede utilizar la distancia Gower. Es bueno para data set pequeños y modelados, ya que se hace complejo para datos garndes.
+
+```{r}
+ames_recipe %>%
+  step_impute_knn(all_predictors(), neighbors = 6)
+```
+
+###Tree-based
+
+Igualmente los árboles de decisiones se ven a fondo en capítulos posteriores (capítulo 9) y sus derivadas se pueden construir en presencia de valores perdidos. También se utiliza para imputar datos. Los arboles individuales tienen alta varianza, cuando se agregan más arboles se vuelve un predictor robusto y de baja varianza. Lo que tiene de desventaja es que requiere muchos recursos computacionales. Los Bagged tree ofrecen un compromiso entre la precisión y la carga computacional.
+
+
+
+Igual que el método anterior , las observaciones perdidas se identifican y la caracteristica que contiene el valor perdido se trata como un objetivo y se tredose con tree-based imputation .
+```{r}
+ames_recipe %>%
+  step_impute_bag(all_predictors())
+```
+
+Se llevaran las diferencia entre KNN y Tree-base y son mejor que los metodos estadísticos mencionados anteriormente.
+
+#Feature filtering
+
+Para tener mayor practicidad, se utilizan solo las características adecuadas , ya que un modelo con características que sobran es más costoso computacionalmente y díficil de interpretar. Además puede afectar negativamente a medida que se añaden más acarcaterísticas. Metodos como elastic nets, random forests y gradient boosting machines, consumen más tiempo cuando más predictores añadimos. En consecuencia la herramienta de filtrado o reduccion de características antes de modelar puede acelerar significativamente el tiempo de entrenamiento. 
+
+Las variables de varianza zero y casi zero son más fáciles de eliminar. Por que la varianza cero significa que solo tiene un único valor la variable, y no es útil para el modelo, y puede causar problemas durante el remuestreo , ya que existe una alta probabilidad de que una muestra dada sólo tenga un unico valor para esa característica. 
+
+La fracción de valores únicos sobre el tamaño de la muestra es baja y la relacion entre la mayor frecuencia (aproximadamente 10<= caracteristica <= 20) cumple los criterios, suele ser ventajoso emilinar la variable del modelo. ya que ese es el lumbra de varianza cero. 
+
+```{r}
+caret::nearZeroVar(ames_train, saveMetrics = TRUE) %>% 
+  tibble::rownames_to_column() %>% 
+  filter(nzv)
+```
+
+
+#Numeric feature engineeting
+
+Las características númericas pueden causar una serie de problemas a determinados modelos cuando sus distribuciones son sesgados, contiene valores atípicos o una amplia magnitudes. Los modelos tree-based son bastantes inmunes a este tipo de problemas en el espacio de las característica, pero en otros modelos como KNN pueden verse muy perjudiciables. Por eso se debe de normalizar y estandarización características muy sesgadas puede ayudar a minimizar.
+
+## Skewness
+
+Los modelos parametricos tienen supuestos de distribución pueden beneficiarse de la minimización de las asimetrías de las características númericas. Cuando se normalizan muchas variables es mejor utilizar Box-Cox, Yeo-Johnson ya que identifican si se requiere una transformación y cuál será la transformación optima. 
+
+```{r}
+recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_YeoJohnson(all_numeric()) 
+```
+
+
+
+##Standardization
+Es una buena practica estandarizar las características , es decir normalizar las características incluye el centrado y escalado para que las variables númericas tengan una misma media cero y una varianza unitaria 
+
+```{r}
+ames_recipe %>%
+  step_center(all_numeric(), -all_outcomes()) %>%
+  step_scale(all_numeric(), -all_outcomes())
+```
+
+
+Paquetes como caret o gimnet tienen opciones integradas para estandarizar y otro no como las neural networks. La mejor practica es estandarizar tus variables tanto las de entrenamiento y las de prueba para que se basen en la mismo media y varianza. Esto ayuda a minimizar la fuga de datos. 
+
+#Categorical feature engineering
+Muchos modelos requieren predictores tengan forma numérica, los Tree-based se benefician del preprocesamiento categórico. Las formas comunes se expresan en las siguientes secciones
+
+##lumping 
+
+En los casos donde las caracteristicas contienen niveles que tienene muy pocas observaciones. 
+
+```{r}
+count(ames_train, Neighborhood) %>% arrange(n)
+```
+
+Incluso características númericas pueden tener distribuciones similares. 
+
+```{r}
+count(ames_train, Screen_Porch) %>% arrange(n)
+```
+
+Entonces es útil agrupar estos valores en un número menor de categorías. Nota importante se debe de usar con moderación ya que a menudo se producen pérdidas en el rendimiento. 
+
+
+```{r}
+# Lump levels for two features
+lumping <- recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_other(Neighborhood, threshold = 0.01, 
+             other = "other") %>%
+  step_other(Screen_Porch, threshold = 0.1, 
+             other = ">0")
+
+# Apply this blue print --> you will learn about this at 
+# the end of the chapter
+apply_2_training <- prep(lumping, training = ames_train, strings_as_factors = FALSE) %>%
+  bake(ames_train)
+
+# New distribution of Neighborhood
+count(apply_2_training, Neighborhood) %>% arrange(n)
+
+count(apply_2_training, Screen_Porch) %>% arrange(n)
+```
+
+##One-hot & summy encoding
+
+
+Debemos de transformar inteligentemente cualquier variable categórica en representaciones numéricas en algunos casos.Algunos paquetes automatiza el proceso como h20 o caret y otro no glmnet o keras. La forma más común es la denominada "one-hot" transforma variables categoricas para cada nivel de la característica se representa como un valor booleano. 
+
+Cuando encodigamos dummy se puede utilizar "step_dummy()" 
+```{r}
+# Lump levels for two features
+recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_dummy(all_nominal(), one_hot = TRUE)
+```
+ 
+## LAbel encoding
+
+Es una conversión pura númerica de los nivels de una variable categorica. Esta variable categorica es un factory tiene niveles prespecificos, la forma más sencilla es ordenar de forma alfabeticamente con "step_integer()"
+
+```{r}
+# Original categories
+count(ames_train, MS_SubClass)
+```
+
+Como vemos con label encoding vemos variables categorica desordenada pero más modeles necesita feacture numericos ordenados. Si las caracteristicas categoricas ya se encuentran de entrada ordenadas se puedde usar sin problema este metodo
+
+```{r}
+recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_integer(MS_SubClass) %>%
+  prep(ames_train) %>%
+  bake(ames_train) %>%
+  count(MS_SubClass)
+```
+
+```{r}
+ames_train %>% select(contains("Qual"))
+
+count(ames_train, Overall_Qual)
+
+recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_integer(Overall_Qual) %>%
+  prep(ames_train) %>%
+  bake(ames_train) %>%
+  count(Overall_Qual)
+```
+
+## Alternativas
+
+Esta exploraciones, Por ejemplo target encoding es un proceso de replazar los valores categorica, con la media (regresión) o proporción (clasificación) de target. Por ejemplo Neighrhood se puede cambiar. Una alternativa aproximación incluyendo el efecto de likelihood encoding. methos empiricos Bayesianos.
+
+#dimension reduction
+
+Lareducción de dimensiones es una alternativa para filtrar nuetro feature no-informativas junto con la removesión. Este topico se discute en los capitulos (17-19). 
+Sin embargo, tenemos muchas categorias, se verifican comunmente incluyendo estos tipos de reducción de dimensiones . El más comun es el PCA.
+
+```{r}
+recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_center(all_numeric()) %>%
+  step_scale(all_numeric()) %>%
+  step_pca(all_numeric(), threshold = .95)
+```
+
+
+#proper implementation
+
+La ingenería de características tenemos una forma manual de como manejar algunos problemas. Es importante recalcar dos cosas: pensamiento secuencial y aplicar apropiadamente los procesos de resampling
+
+## Sequential steps
+
+El proceso ordenado del prepocesamiento se hace por pasos, que se estuvieron mencionado anteriormente. En cada problema en partícular requiere un prepocesamiento secuencial, las sugerencias generales son:
+
+* usar transformadas Box-Cox no centrada en el primer dato o con muchas operaciones de datos no-positivo. Una alternativa es usar metodos de transformación Yeo-Johnson * tipicamente "one-hot" o "dummy" es el resultado de aparse data con muchos algoritmos para que cada operación sea más eficiente. Si al momento de estandarizar una data set densa y se pierde la eficiencia computacional.
+
+*Si tu 
+
+Mientras tu necesites tu proyecto muchas variables, esta son las sugerencias ordenadasde pasos potenciales para resolver los problemas:
+
+1. Filtrar las variables de zero o casi cero varianza
+2. Si es requerido imputar datos
+3. Normalizar y resolver sesgos de variables númerica
+4. Estandarizar las variables númericas 
+5. Si se puede se reduce las dimensiones de la data de variables númerico
+6.Para variables categoricas se aplica el "One-hot" o "dummy"
+
+
+## Data leakage
+
+Es cuando la información de salida del entrenamiento del data se crea un modelo. El "Data leakage" ocurren durante el peridodo del procesamiento. Al minimizar las variables con las tecnicas de ingeniería de características vemos isolation en cada iteración de rezampleo. DEbemos estimar el error de predicción generalizado. 
+
+## Putting the process together
+
+Se ejemplifica y se hace el primer ejemplo con la librería "recipes" , esta permite desarrollar nuestro plan de ingeniería de características esto ocurre en tres pasos: crear nuestro blueprint, estimar los parametros, basandose en los datos del entrenamieto y al final aplicarle el modelo a los nuevos datos. 
+
+```{r}
+blueprint <- recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_nzv(all_nominal())  %>%
+  step_integer(matches("Qual|Cond|QC|Qu")) %>%
+  step_center(all_numeric(), -all_outcomes()) %>%
+  step_scale(all_numeric(), -all_outcomes()) %>%
+  step_pca(all_numeric(), -all_outcomes())
+  
+blueprint
+```
+
+
+El primer paso hay que definir el modelo, para ello hay que saber que formula es de interes, despues se añade los pasos de la ingeniería de características, eliminando las características que la varianza sea cercana a 0, central y escalar, en otras palabras es estandarizar y reducir las dimensiones. 
+
+```{r}
+prepare <- prep(blueprint, training = ames_train)
+prepare
+```
+
+
+```{r}
+baked_train <- bake(prepare, new_data = ames_train)
+baked_test <- bake(prepare, new_data = ames_test)
+baked_train
+```
+
+
+
+```{r}
+blueprint <- recipe(Sale_Price ~ ., data = ames_train) %>%
+  step_nzv(all_nominal()) %>%
+  step_integer(matches("Qual|Cond|QC|Qu")) %>%
+  step_center(all_numeric(), -all_outcomes()) %>%
+  step_scale(all_numeric(), -all_outcomes()) %>%
+  step_dummy(all_nominal(), -all_outcomes(), one_hot = TRUE)
+```
+
+
+```{r}
+# Specify resampling plan
+cv <- trainControl(
+  method = "repeatedcv", 
+  number = 10, 
+  repeats = 5
+)
+
+# Construct grid of hyperparameter values
+hyper_grid <- expand.grid(k = seq(2, 25, by = 1))
+
+# Tune a knn model using grid search
+knn_fit2 <- train(
+  blueprint, 
+  data = ames_train, 
+  method = "knn", 
+  trControl = cv, 
+  tuneGrid = hyper_grid,
+  metric = "RMSE"
+)
+
+
+```
+
+
+Por ello se sigue que dentro de cada iteración de remuestreo se aplicen "prep()" y "bake()" a nuestros datos de entrenamiento y validación de remuestreo. 
+
+```{r}
+knn_fit2
+```
+
+# Referencias
+
+1.  <https://bradleyboehmke.github.io/HOML/>
+2.  <https://es.r4ds.hadley.nz/r-markdown.html>
+3.  <https://bookdown.org/yihui/rmarkdown-cookbook/>
+4.  <https://ethz.ch/content/dam/ethz/special-interest/math/statistics/sfs/Education/Advanced%20Studies%20in%20Applied%20Statistics/course-material-1719/Datenanalyse/rmarkdown-2.pdf>
+5.  <https://www.r-bloggers.com/2018/12/an-introduction-to-h2o-using-r/>

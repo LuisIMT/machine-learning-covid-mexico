@@ -1,0 +1,237 @@
+---
+title: "graficas"
+author: "LuisIMT"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r curado generalizado}
+
+covid.bd <- read.csv('covid_ML/230314COVID19MEXICO.csv')
+
+c.bd <- dplyr::select(covid.bd,SECTOR,ENTIDAD_UM,SEXO,ENTIDAD_RES,TIPO_PACIENTE, FECHA_DEF, INTUBADO, NEUMONIA, EDAD, EMBARAZO, INDIGENA,DIABETES,EPOC, ASMA, INMUSUPR,HIPERTENSION, OTRA_COM, CARDIOVASCULAR,OBESIDAD, RENAL_CRONICA, TABAQUISMO, CLASIFICACION_FINAL, MIGRANTE, UCI)
+
+c2.bd <- dplyr::filter(c.bd,CLASIFICACION_FINAL %in% c(1,2,3)) 
+
+covid.filtro <- dplyr::mutate(c2.bd, DEFUNCION = ifelse(FECHA_DEF == "9999-99-99",2,1))
+
+covid.final <- dplyr::select(covid.filtro, -c(FECHA_DEF))
+write.csv(covid.final, file = 'covid19.curada.csv', row.names = TRUE)
+
+
+dim(covid.final)
+sum(is.na(covid.final))
+visdat::vis_miss(covid.final,warn_large_data = FALSE )
+apply(covid.final, 2, var) # imprimir la varianza
+
+
+sink("datos.txt")
+cat(print(sum(is.na(covid.final))))
+cat('\n')
+cat(print(apply(covid.final, 2, var)))
+sink()
+
+#covid <- ggpairs(covid.final, cardinality_threshold = NULL)
+#ggsave(covid, filename = "grafico_covid_exploratorio.pdf", device = pdf, width = 150, height = 150, units = "cm", limitsize = FALSE)
+
+
+```
+
+Modelos
+
+El estudio con los modelos de de Machine Learning que estaremos explorando son: regresión lineal , regresión multilineal
+
+
+Para el primer caso de la regresión lineal, usamos los coeficiente de correlaion de Pearson para asociar dos variables continuas
+
+```{r partición de datos}
+library(caret)
+library(rsample)
+library(dplyr)
+set.seed(pi)
+#simple random
+covid.test.random <- caret::createDataPartition(covid.final$ASMA, p=0.80, list = FALSE)
+covid.training <- covid.final[covid.test.random,]
+covid.testing <- covid.final[-covid.test.random,]
+
+#Stratified sampling
+
+bd.covid <- read.csv('covid19.curada.csv')
+
+table(bd.covid$DEFUNCION) %>% 
+  prop.table()
+set.seed(2*pi)
+stratified.covid <- rsample::initial_split(bd.covid, prop = 0.80, strata = "DEFUNCION")
+
+train.covid <- training(stratified.covid)
+test.covid <- testing(stratified.covid)
+
+
+table(train.covid$DEFUNCION) %>% 
+  prop.table()
+
+table(test.covid$DEFUNCION) %>% 
+  prop.table()
+```
+
+```{r linear model DEFUNCION}
+#relación asma e intubados
+covid.linear.modeL01 <- lm(DEFUNCION ~ ASMA + INTUBADO, data = train.covid)
+summary(covid.linear.model01)
+#relación tipo de paciente e intubado
+covid.linear.model02 <- lm(DEFUNCION ~ TIPO_PACIENTE + INTUBADO, data = train.covid)
+summary(covid.linear.model02)
+#relacion sector y obesidad
+covid.linear.model03 <- lm(DEFUNCION ~ HIPERTENSION + OBESIDAD, data = train.covid)
+summary(covid.linear.model03)
+#relacion entidad_um y neumonia
+covid.linear.model04 <- lm(DEFUNCION ~ ENTIDAD_UM + NEUMONIA, data = train.covid)
+summary(covid.linear.model04)
+#relacion sector e intubado
+covid.linear.model05 <- lm(DEFUNCION ~ TABAQUISMO + INTUBADO, data = train.covid)
+summary(covid.linear.model05)
+```
+```{r linear model DEFUNCION libro}
+covid.linear.model06 <- lm(DEFUNCION ~ ., data = train.covid)
+broom::tidy(covid.linear.model06)
+```
+
+
+```{r linear model cross-validation}
+set.seed(pi)  # para que sea reproducible
+(cv_model1 <- caret::train(
+  form = DEFUNCION ~ ENTIDAD_UM, 
+  data = train.covid, 
+  method = "lm",
+  trControl = caret::trainControl(method = "cv", number = 10)
+))
+
+set.seed(pi)  
+(cv_model2 <- caret::train(
+  form = DEFUNCION ~ ENTIDAD_UM + TIPO_PACIENTE, 
+  data = train.covid, 
+  method = "lm",
+  trControl = caret::trainControl(method = "cv", number = 10)
+))
+```
+
+```{r grafica regresion lineal}
+ggplot(train.covid, aes(x=DEFUNCION, y=TIPO_PACIENTE)) + 
+  geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+```{r}
+# Se crea el grafico 3d y se guarda en un objeto, por ejemplo mi_3d
+library(scatterplot3d)
+attach(train.covid)
+mi_3d <- scatterplot3d::scatterplot3d(x=SECTOR, y=OBESIDAD, z=DEFUNCION, pch=16, cex.lab=1,
+                       highlight.3d=TRUE, type="h", xlab='SECTOR',
+                       ylab='OBESIDAD', zlab='DEFUNCION')
+# Para agregar el plano usamos $plane3d( ) con argumento modelo ajustado
+mi_3d$plane3d(mod, lty.box="solid", col='mediumblue')
+```
+
+
+```{r regresion lineal con variable dummy}
+
+#bd.covid$MUERTOS <- ifelse(condicion, "si", "no")
+
+```
+
+```{r linear model ASMA}
+# Helper packages
+library(dplyr)    # for data manipulation
+library(ggplot2)  # for awesome graphics
+library(visdat)   # for additional visualizations
+
+# Feature engineering packages
+library(caret)    # for various ML tasks
+library(recipes)  # for feature engineering tasks
+#numerico.clasificacion.final<- recipe(ASMA ~ ., data = train.covid) %>% step_dummy(all_nominal(), one_hot = TRUE)
+copied.covid.train <- train.covid
+numerico.clasificacion.final<- scorecard::one_hot(copied.covid.train)
+summary(numerico.clasificacion.final)
+
+
+covid.linear.model05 <- lm(ASMA ~ CLASIFICACION_FINAL, data = numerico.clasificacion.final)
+summary(covid.linear.model05)
+```
+
+
+```{r multilinear caret }
+
+modelo.regresion.entrenado.covid01 <- caret::train(
+  form = CLASIFICACION_FINAL ~ ASMA + MIGRANTE + INTUBADO,
+  data = train.covid,
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 10)
+)
+
+summary(modelo.regresion.entrenado.covid01)
+
+
+modelo.regresion.entrenado.covid02 <- caret::train(
+  form = CLASIFICACION_FINAL ~ ENTIDAD_UM + EPOC + DEFUNCION,
+  data = train.covid,
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 10)
+)
+
+summary(modelo.regresion.entrenado.covid02)
+
+
+modelo.regresion.entrenado.covid03 <- caret::train(
+  form = CLASIFICACION_FINAL ~  DEFUNCION,
+  data = train.covid,
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 10)
+)
+
+summary(modelo.regresion.entrenado.covid03)
+```
+
+
+```{r grafica }
+ggplot(train.covid, aes(ASMA, SEXO)) + 
+  geom_point(size = 1, alpha = .4) + 
+  geom_smooth(method = "lm", se = FALSE) +
+  ggtitle(paste("ASMA -\n",
+                "SEXO"))
+```
+
+```{r regresion logistica}
+
+```
+
+```{r arbol de decision librerias}
+
+# Helper packages
+library(dplyr)       # for data wrangling
+library(ggplot2)     # for awesome plotting
+library(doParallel)  # for parallel backend to foreach
+library(foreach)     # for parallel processing with for loops
+
+# Modeling packages
+library(caret)       # for general model fitting
+library(rpart)       # for fitting decision trees
+library(ipred)       # for fitting bagged decision trees
+
+# Model interpretability packages
+library(rpart.plot)  # for plotting decision trees
+library(vip)         # for feature importance
+library(pdp)         # for feature effects
+```
+Con la base de datos AMES vamos a predecir el precio de venta de las viviendas en base a arboles de decision 
+```{r arbol de decision}
+
+```
+
+
+
